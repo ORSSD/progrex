@@ -1,0 +1,4 @@
+# Copy to .dev.vars for local development (it is git-ignored).
+ADMIN_PASSWORD=change-me
+# Optional: signs admin sessions. Defaults to ADMIN_PASSWORD if not set.
+SESSION_SECRET=
