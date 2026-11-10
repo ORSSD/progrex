@@ -36,3 +36,8 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+
+# local worker secrets and data
+.dev.vars
+/.data/
+*.tsbuildinfo

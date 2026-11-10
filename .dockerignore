@@ -6,3 +6,5 @@ dist
 .vinext
 .env*
 npm-debug.log*
+.data
+.dev.vars
