@@ -1,12 +1,13 @@
 import Link from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
 import { ProjectVisual } from './project-visual';
-import { disciplineLabel, statusLabel, t } from '@/lib/i18n';
+import { dict, disciplineLabel, statusLabel, t } from '@/lib/i18n';
 import { localize, type Lang, type Project } from '@/lib/types';
 
 /** Large, full-width card used for featured work on the home page. */
 export function FeatureCard({ project, index, lang }: { project: Project; index: number; lang: Lang }) {
   const c = localize(project, lang);
+  const metric = c.metrics.at(-1);
   return (
     <article className="feature" data-reveal>
       <div className="feature-meta">
@@ -18,11 +19,25 @@ export function FeatureCard({ project, index, lang }: { project: Project; index:
         </span>
         <span className={`status status-${project.status}`}>{t(statusLabel, project.status, lang)}</span>
       </div>
-      <Link href={`/work/${project.slug}`} className="feature-link">
-        <ProjectVisual project={project} content={c} index={index} />
+      <Link href={`/work/${project.slug}`} className="feature-link" data-cursor>
+        <div className="feature-visual">
+          <ProjectVisual project={project} content={c} index={index} />
+          <span className="view-pill" aria-hidden>
+            {dict[lang].viewCase}
+            <ArrowUpRight />
+          </span>
+        </div>
         <div className="feature-title">
           <h3>{c.title}</h3>
           <p>{c.summary}</p>
+          {metric ? (
+            <div className="feature-metric">
+              <b>{metric.value}</b>
+              <span>{metric.label}</span>
+            </div>
+          ) : (
+            <span />
+          )}
           <ArrowUpRight className="arrow" />
         </div>
       </Link>

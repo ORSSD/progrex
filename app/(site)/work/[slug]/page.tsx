@@ -166,6 +166,17 @@ export default async function CaseStudy({ params }: Props) {
           </Link>
         )}
       </section>
+
+      <section className="case-cta">
+        <h2 data-reveal>
+          {d.caseCta[0]}
+          <br />
+          <em>{d.caseCta[1]}</em>
+        </h2>
+        <Link href="/#contact" className="btn btn-primary">
+          {d.start} <ArrowUpRight />
+        </Link>
+      </section>
     </article>
   );
 }

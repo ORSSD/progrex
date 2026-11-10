@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 
 /**
- * Fades in every `[data-reveal]` element as it scrolls into view.
+ * Fades in every `[data-reveal]` element as it scrolls into view, and tracks the pointer over `[data-cursor]`.
  * Watches the DOM so content added later (navigation, language switch) is picked up too.
  */
 export function Reveal() {
@@ -26,9 +26,20 @@ export function Reveal() {
     scan();
     const mo = new MutationObserver(scan);
     mo.observe(document.body, { childList: true, subtree: true });
+
+    // Let `[data-cursor]` elements know where the pointer is, so a label can follow it.
+    const onMove = (e: PointerEvent) => {
+      const el = (e.target as Element | null)?.closest<HTMLElement>('[data-cursor]');
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      el.style.setProperty('--mx', `${e.clientX - r.left}px`);
+      el.style.setProperty('--my', `${e.clientY - r.top}px`);
+    };
+    document.addEventListener('pointermove', onMove, { passive: true });
     return () => {
       io.disconnect();
       mo.disconnect();
+      document.removeEventListener('pointermove', onMove);
     };
   }, []);
   return null;
