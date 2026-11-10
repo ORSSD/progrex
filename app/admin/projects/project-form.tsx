@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useActionState, useEffect, useRef, useState } from 'react';
+import { startTransition, useActionState, useEffect, useRef, useState } from 'react';
 import { ProjectVisual } from '@/components/site/project-visual';
 import { disciplineLabel, statusLabel } from '@/lib/i18n';
 import { DISCIPLINES, STATUSES, emptyContent, type Project, type ProjectContent, type Visual } from '@/lib/types';
@@ -94,7 +94,7 @@ function ContentFields({ lang, c }: { lang: 'en' | 'ar'; c: ProjectContent }) {
   );
 }
 
-export function ProjectForm({ project }: { project?: Project }) {
+export function ProjectForm({ project, base }: { project?: Project; base: string }) {
   const p = project ?? blankProject();
   const isNew = !project;
   const [state, action, pending] = useActionState<SaveState, FormData>(saveProject, {});
@@ -141,12 +141,22 @@ export function ProjectForm({ project }: { project?: Project }) {
   };
 
   return (
-    <form ref={formRef} action={action} onInput={sync} className="a-form">
+    <form
+      ref={formRef}
+      // Submit manually so React does not reset the form: a failed save must keep what was typed.
+      onSubmit={(e) => {
+        e.preventDefault();
+        const data = new FormData(e.currentTarget);
+        startTransition(() => action(data));
+      }}
+      onInput={sync}
+      className="a-form"
+    >
       <input type="hidden" name="id" value={p.id || ''} />
 
       <div className="a-head sticky">
         <div>
-          <Link href="/admin" className="a-back">
+          <Link href={base} className="a-back">
             ← Projects
           </Link>
           <h1>{isNew ? 'New project' : p.en.title}</h1>
@@ -283,8 +293,8 @@ export function ProjectForm({ project }: { project?: Project }) {
               ))}
             </div>
             <label>
-              Cover image <span>JPG, PNG or WebP, up to 5 MB</span>
-              <input type="file" name="cover" accept="image/*" onChange={onCover} />
+              Cover image <span>JPG, PNG, WebP, GIF or AVIF, up to 5 MB</span>
+              <input type="file" name="cover" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" onChange={onCover} />
             </label>
             {p.coverKey && (
               <label className="a-check">

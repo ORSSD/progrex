@@ -1,3 +1,4 @@
+import { adminHref } from '@/lib/admin-path';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Brand } from '@/components/site/brand';
@@ -16,13 +17,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <div className="admin" dir="ltr" lang="en">
       {authed && (
         <header className="admin-bar">
-          <Link href="/admin" className="admin-brand">
+          <Link href={adminHref()} className="admin-brand">
             <Brand small />
             <span>Studio admin</span>
           </Link>
           <nav>
-            <Link href="/admin">Projects</Link>
-            <Link href="/admin/messages">
+            <Link href={adminHref()}>Projects</Link>
+            <Link href={adminHref('/messages')}>
               Inbox {unread > 0 && <b className="badge">{unread}</b>}
             </Link>
             <Link href="/" target="_blank">

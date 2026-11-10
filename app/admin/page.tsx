@@ -1,3 +1,4 @@
+import { adminHref } from '@/lib/admin-path';
 import Link from 'next/link';
 import { requireAdmin } from '@/lib/auth';
 import { listMessages, listProjects } from '@/lib/db';
@@ -19,7 +20,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
           <h1>Projects</h1>
           <p>Everything here appears on the public site the moment it is published. Order here is the order on the site.</p>
         </div>
-        <Link href="/admin/projects/new" className="a-btn a-btn-primary">
+        <Link href={adminHref('/projects/new')} className="a-btn a-btn-primary">
           + New project
         </Link>
       </div>
@@ -46,7 +47,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
         <div>
           <dt>Unread messages</dt>
           <dd>
-            <Link href="/admin/messages">{unread}</Link>
+            <Link href={adminHref('/messages')}>{unread}</Link>
           </dd>
         </div>
       </dl>
@@ -54,7 +55,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
       {projects.length === 0 ? (
         <div className="a-empty">
           <p>No projects yet.</p>
-          <Link href="/admin/projects/new" className="a-btn a-btn-primary">
+          <Link href={adminHref('/projects/new')} className="a-btn a-btn-primary">
             Add your first project
           </Link>
         </div>
@@ -90,7 +91,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
                     ))}
                   </td>
                   <td>
-                    <Link href={`/admin/projects/${p.id}`} className="a-title">
+                    <Link href={adminHref(`/projects/${p.id}`)} className="a-title">
                       {p.en.title}
                     </Link>
                     <span className="a-sub">
@@ -120,7 +121,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
                     </form>
                   </td>
                   <td className="row-actions">
-                    <Link href={`/admin/projects/${p.id}`}>Edit</Link>
+                    <Link href={adminHref(`/projects/${p.id}`)}>Edit</Link>
                     <form action={removeProject}>
                       <input type="hidden" name="id" value={p.id} />
                       <ConfirmButton message={`Delete “${p.en.title}”? This cannot be undone.`} className="danger">

@@ -1,4 +1,8 @@
 # Copy to .dev.vars for local development (it is git-ignored).
+ADMIN_PATH=my-secret-admin-path
 ADMIN_PASSWORD=change-me
 # Optional: signs admin sessions. Defaults to ADMIN_PASSWORD if not set.
 SESSION_SECRET=
+# Optional: the one header that carries the visitor IP. Default x-real-ip (Dokploy/Traefik).
+# Set to cf-connecting-ip once the site is behind Cloudflare.
+CLIENT_IP_HEADER=

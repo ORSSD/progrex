@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { startTransition, useActionState } from 'react';
 import { ArrowUpRight, Check } from 'lucide-react';
 import { submitContact, type ContactState } from '@/app/actions/contact';
 import { dict } from '@/lib/i18n';
@@ -22,7 +22,15 @@ export function ContactForm({ lang }: { lang: Lang }) {
   }
 
   return (
-    <form action={action} className="contact-form">
+    <form
+      // Submit manually so a validation error does not wipe what the visitor typed.
+      onSubmit={(e) => {
+        e.preventDefault();
+        const data = new FormData(e.currentTarget);
+        startTransition(() => action(data));
+      }}
+      className="contact-form"
+    >
       <div className="form-row">
         <label>
           {f.name}
@@ -54,9 +62,9 @@ export function ContactForm({ lang }: { lang: Lang }) {
         Website
         <input name="website" tabIndex={-1} autoComplete="off" />
       </label>
-      {state.status === 'error' && (
+      {(state.status === 'error' || state.status === 'limited') && (
         <p className="form-error" role="alert">
-          {f.error}
+          {state.status === 'limited' ? f.limited : f.error}
         </p>
       )}
       <div className="form-actions">

@@ -1,7 +1,9 @@
 'use server';
 
+import { adminHref } from '@/lib/admin-path';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { clientIp, securityLog } from '@/lib/request';
 import { checkPassword, endSession, requireAdmin, startSession } from '@/lib/auth';
 import {
   bindings,
@@ -11,6 +13,9 @@ import {
   getProjectById,
   moveProject,
   nextSort,
+  rateBlockedFor,
+  rateClear,
+  rateRecord,
   setMessageRead,
   setProjectFlag,
   slugTaken,
@@ -31,19 +36,41 @@ const text = (v: FormDataEntryValue | null) => (typeof v === 'string' ? v : '');
 
 /* ---------- session ---------- */
 
+const minutes = (s: number) => Math.max(1, Math.ceil(s / 60));
+
+// 5 wrong passwords from one IP within 15 minutes blocks that IP for 15 minutes.
+const LOGIN_MAX_FAILURES = 5;
+const LOGIN_WINDOW = 15 * 60;
+const loginBlockedFor = (ip: string) => rateBlockedFor('login-fail', ip, LOGIN_MAX_FAILURES, LOGIN_WINDOW);
+
 export async function login(_prev: { error?: string }, form: FormData): Promise<{ error?: string }> {
+  const ip = await clientIp();
+  const wait = await loginBlockedFor(ip);
+  if (wait > 0) {
+    securityLog('login.blocked', { ip });
+    return { error: `Too many attempts. Try again in ${minutes(wait)} min.` };
+  }
+
   const ok = await checkPassword(text(form.get('password')));
   if (!ok) {
+    await rateRecord('login-fail', ip);
     await new Promise((r) => setTimeout(r, 600)); // slow down guessing
-    return { error: 'Wrong password.' };
+    const nowBlocked = await loginBlockedFor(ip);
+    securityLog(nowBlocked ? 'login.lockout' : 'login.failed', { ip });
+    return {
+      error: nowBlocked ? `Too many attempts. Try again in ${minutes(nowBlocked)} min.` : 'Wrong password.',
+    };
   }
+  await rateClear('login-fail', ip);
   await startSession();
-  redirect('/admin');
+  securityLog('login.success', { ip });
+  redirect(adminHref());
 }
 
 export async function logout() {
+  securityLog('logout', { ip: await clientIp() });
   await endSession();
-  redirect('/admin/login');
+  redirect(adminHref('/login'));
 }
 
 /* ---------- projects ---------- */
@@ -85,14 +112,30 @@ const slugify = async (s: string) =>
 
 const MAX_IMAGE = 5 * 1024 * 1024;
 
+/**
+ * Identify the image from its first bytes rather than trusting the browser's type or the
+ * file name. Only raster formats are allowed: SVG can carry scripts.
+ */
+function sniffImage(b: Uint8Array): { type: string; ext: string } | null {
+  const at = (i: number, ...bytes: number[]) => bytes.every((x, k) => b[i + k] === x);
+  const ascii = (i: number, s: string) => Array.from({ length: s.length }, (_, k) => k).every((k) => b[i + k] === s.charCodeAt(k));
+  if (at(0, 0xff, 0xd8, 0xff)) return { type: 'image/jpeg', ext: 'jpg' };
+  if (at(0, 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)) return { type: 'image/png', ext: 'png' };
+  if (ascii(0, 'GIF87a') || ascii(0, 'GIF89a')) return { type: 'image/gif', ext: 'gif' };
+  if (ascii(0, 'RIFF') && ascii(8, 'WEBP')) return { type: 'image/webp', ext: 'webp' };
+  if (ascii(4, 'ftypavif') || ascii(4, 'ftypavis')) return { type: 'image/avif', ext: 'avif' };
+  return null;
+}
+
 async function uploadCover(file: File, slug: string) {
   const bucket = bindings().MEDIA;
   if (!bucket) throw new Error('Image storage is not configured.');
-  if (!file.type.startsWith('image/')) throw new Error('Cover must be an image file.');
   if (file.size > MAX_IMAGE) throw new Error('Cover image must be 5 MB or smaller.');
-  const ext = (file.name.split('.').pop() || 'img').toLowerCase().replace(/[^a-z0-9]/g, '');
-  const key = `projects/${slug}-${Date.now().toString(36)}.${ext}`;
-  await bucket.put(key, await file.arrayBuffer(), { httpMetadata: { contentType: file.type } });
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const kind = sniffImage(bytes);
+  if (!kind) throw new Error('Cover must be a JPG, PNG, WebP, GIF or AVIF image.');
+  const key = `projects/${slug}-${Date.now().toString(36)}.${kind.ext}`;
+  await bucket.put(key, bytes, { httpMetadata: { contentType: kind.type } });
   return key;
 }
 
@@ -164,7 +207,7 @@ export async function saveProject(_prev: SaveState, form: FormData): Promise<Sav
   }
   refresh(slug);
   if (existing && existing.slug !== slug) revalidatePath(`/work/${existing.slug}`);
-  redirect(`/admin?saved=${encodeURIComponent(slug)}`);
+  redirect(adminHref(`?saved=${encodeURIComponent(slug)}`));
 }
 
 /** Only allow http(s) links so a stored URL can never run script. */
@@ -196,9 +239,10 @@ export async function removeProject(form: FormData) {
   const p = await getProjectById(Number(form.get('id')));
   if (!p) return;
   await deleteProject(p.id);
+  securityLog('project.deleted', { ip: await clientIp(), slug: p.slug });
   if (p.coverKey) await bindings().MEDIA?.delete(p.coverKey);
   refresh(p.slug);
-  redirect('/admin');
+  redirect(adminHref());
 }
 
 /* ---------- messages ---------- */
@@ -212,5 +256,6 @@ export async function markMessage(form: FormData) {
 export async function removeMessage(form: FormData) {
   await requireAdmin();
   await deleteMessage(Number(form.get('id')));
+  securityLog('message.deleted', { ip: await clientIp(), id: Number(form.get('id')) });
   revalidatePath('/admin/messages');
 }

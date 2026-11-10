@@ -22,11 +22,39 @@ const args = [
 ];
 
 // Pass secrets from the container environment into the worker.
-for (const name of ['ADMIN_PASSWORD', 'SESSION_SECRET']) {
+for (const name of ['ADMIN_PATH', 'ADMIN_PASSWORD', 'SESSION_SECRET', 'CLIENT_IP_HEADER']) {
   if (process.env[name]) args.push('--var', `${name}:${process.env[name]}`);
 }
-if (!process.env.ADMIN_PASSWORD) console.warn('ADMIN_PASSWORD is not set — /admin will stay locked.');
+if (!process.env.ADMIN_PATH || !process.env.ADMIN_PASSWORD)
+  console.warn('ADMIN_PATH and ADMIN_PASSWORD must both be set, or the admin stays unreachable.');
 
-const child = spawn('npx', args, { stdio: 'inherit', shell: process.platform === 'win32' });
-for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => child.kill(sig));
-child.on('exit', (code) => process.exit(code ?? 0));
+// `wrangler dev` is not hardened for production traffic, so restart it if it ever exits
+// unexpectedly. Deploying to Cloudflare Workers would remove this layer entirely.
+let child = null;
+let stopping = false;
+let restarts = [];
+
+function start() {
+  child = spawn('npx', args, { stdio: 'inherit', shell: process.platform === 'win32' });
+  child.on('exit', (code, signal) => {
+    if (stopping) return process.exit(code ?? 0);
+    // If it keeps crashing (10 times in a minute), exit and let the container restart policy decide.
+    const now = Date.now();
+    restarts = restarts.filter((t) => now - t < 60_000).concat(now);
+    if (restarts.length > 10) {
+      console.error('[start] server keeps crashing; exiting.');
+      return process.exit(1);
+    }
+    console.error(`[start] server exited (code=${code} signal=${signal}); restarting in 1s…`);
+    setTimeout(start, 1000);
+  });
+}
+
+for (const sig of ['SIGINT', 'SIGTERM']) {
+  process.on(sig, () => {
+    stopping = true;
+    child?.kill(sig);
+  });
+}
+
+start();

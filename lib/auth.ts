@@ -1,6 +1,7 @@
+import { adminHref } from '@/lib/admin-path';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { bindings } from './db';
+import { bindings, bumpSessionEpoch, getSessionEpoch } from './db';
 
 const COOKIE = 'progrex_admin';
 const MAX_AGE = 60 * 60 * 24 * 7; // one week
@@ -40,9 +41,11 @@ export async function checkPassword(input: string) {
   return same(input, expected);
 }
 
+// Token format: "admin.<epoch>.<expiry>.<signature>". Signing out bumps the epoch,
+// which revokes every session issued before it, on every device.
 export async function startSession() {
   const exp = Math.floor(Date.now() / 1000) + MAX_AGE;
-  const payload = `admin.${exp}`;
+  const payload = `admin.${await getSessionEpoch()}.${exp}`;
   const jar = await cookies();
   jar.set(COOKIE, `${payload}.${await sign(payload)}`, {
     httpOnly: true,
@@ -54,6 +57,7 @@ export async function startSession() {
 }
 
 export async function endSession() {
+  if (await isAdmin()) await bumpSessionEpoch();
   (await cookies()).delete(COOKIE);
 }
 
@@ -64,12 +68,13 @@ export async function isAdmin() {
   const i = raw.lastIndexOf('.');
   const payload = raw.slice(0, i);
   const sig = raw.slice(i + 1);
-  const exp = Number(payload.split('.')[1]);
-  if (!exp || exp < Date.now() / 1000) return false;
-  return same(sig, await sign(payload));
+  const [tag, epoch, exp] = payload.split('.');
+  if (tag !== 'admin' || !Number(exp) || Number(exp) < Date.now() / 1000) return false;
+  if (!same(sig, await sign(payload))) return false;
+  return Number(epoch) === (await getSessionEpoch());
 }
 
 /** Use at the top of every admin page and admin server action. */
 export async function requireAdmin() {
-  if (!(await isAdmin())) redirect('/admin/login');
+  if (!(await isAdmin())) redirect(adminHref('/login'));
 }

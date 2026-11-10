@@ -1,10 +1,11 @@
+import { adminHref } from '@/lib/admin-path';
 import { redirect } from 'next/navigation';
 import { Brand } from '@/components/site/brand';
 import { adminConfigured, isAdmin } from '@/lib/auth';
 import { LoginForm } from './login-form';
 
 export default async function LoginPage() {
-  if (await isAdmin()) redirect('/admin');
+  if (await isAdmin()) redirect(adminHref());
   return (
     <div className="login">
       <Brand />

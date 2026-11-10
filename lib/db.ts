@@ -54,6 +54,8 @@ const SCHEMA = [
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
   `CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS rate_events (kind TEXT NOT NULL, ip TEXT NOT NULL, at INTEGER NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS rate_events_lookup ON rate_events (kind, ip, at)`,
 ];
 
 let ready: Promise<void> | null = null;
@@ -274,4 +276,55 @@ export async function setMessageRead(id: number, read: boolean) {
 export async function deleteMessage(id: number) {
   const DB = await db();
   await DB.prepare(`DELETE FROM messages WHERE id = ?`).bind(id).run();
+}
+
+/* ---------- rate limiting (per IP) ---------- */
+
+export type RateKind = 'login-fail' | 'contact';
+
+/**
+ * Seconds until this IP may act again, or 0 if allowed.
+ * Blocked once it has `max` events of this kind inside `windowSec`; the block lasts
+ * a full window after its latest event.
+ */
+export async function rateBlockedFor(kind: RateKind, ip: string, max: number, windowSec: number) {
+  const DB = await db();
+  const now = Math.floor(Date.now() / 1000);
+  const r = await DB.prepare(
+    `SELECT COUNT(*) AS n, MAX(at) AS last FROM rate_events WHERE kind = ? AND ip = ? AND at > ?`,
+  )
+    .bind(kind, ip, now - windowSec)
+    .first<{ n: number; last: number | null }>();
+  if (!r || r.n < max || r.last == null) return 0;
+  return Math.max(0, r.last + windowSec - now);
+}
+
+export async function rateRecord(kind: RateKind, ip: string) {
+  const DB = await db();
+  const now = Math.floor(Date.now() / 1000);
+  await DB.batch([
+    DB.prepare(`INSERT INTO rate_events (kind, ip, at) VALUES (?, ?, ?)`).bind(kind, ip, now),
+    DB.prepare(`DELETE FROM rate_events WHERE at < ?`).bind(now - 24 * 60 * 60),
+  ]);
+}
+
+export async function rateClear(kind: RateKind, ip: string) {
+  const DB = await db();
+  await DB.prepare(`DELETE FROM rate_events WHERE kind = ? AND ip = ?`).bind(kind, ip).run();
+}
+
+/* ---------- session epoch (bumped on sign-out to revoke every session) ---------- */
+
+export async function getSessionEpoch() {
+  const DB = await db();
+  const r = await DB.prepare(`SELECT value FROM meta WHERE key = 'session_epoch'`).first<{ value: string }>();
+  return Number(r?.value ?? 0);
+}
+
+export async function bumpSessionEpoch() {
+  const DB = await db();
+  await DB.prepare(
+    `INSERT INTO meta (key, value) VALUES ('session_epoch', '1')
+     ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1`,
+  ).run();
 }
