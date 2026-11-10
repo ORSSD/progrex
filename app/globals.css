@@ -272,10 +272,24 @@ section {
     border-color 0.3s var(--ease),
     height 0.3s var(--ease);
 }
-.site-header.is-scrolled,
-.site-header.is-open {
+/* The frosted background lives on a pseudo-element: a backdrop-filter on the header itself
+   would trap the fixed mobile menu inside the header's 64px box. */
+.site-header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
   background: rgba(24, 37, 43, 0.82);
   backdrop-filter: blur(18px) saturate(1.2);
+  opacity: 0;
+  transition: opacity 0.3s var(--ease);
+}
+.site-header.is-scrolled::before,
+.site-header.is-open::before {
+  opacity: 1;
+}
+.site-header.is-scrolled,
+.site-header.is-open {
   border-color: var(--line);
   height: 64px;
 }
@@ -341,7 +355,8 @@ a:hover .brand-mark {
 .site-header nav a:hover::after {
   scale: 1 1;
 }
-.nav-no {
+.nav-no,
+.site-header nav .nav-cta {
   display: none;
 }
 .header-actions {
@@ -2286,6 +2301,28 @@ a:hover .arrow {
   }
   .site-header nav a::after {
     display: none;
+  }
+  .site-header nav .nav-cta {
+    display: flex;
+    margin-top: 32px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--mint);
+    font: 15px var(--font-body);
+    letter-spacing: 0;
+    color: var(--ink);
+  }
+  .site-header nav a.nav-cta,
+  .site-header nav a.nav-cta:hover {
+    color: var(--ink);
+  }
+  [dir='rtl'] .site-header nav {
+    font-size: 26px;
+  }
+  [dir='rtl'] .site-header nav .nav-cta {
+    font: 16px var(--font-arabic);
+  }
+  .site-header nav {
+    overflow-y: auto;
   }
   .nav-no {
     display: inline;

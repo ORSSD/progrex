@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
-import { Menu, X } from 'lucide-react';
+import { ArrowUpRight, Menu, X } from 'lucide-react';
 import { Brand } from './brand';
 import { LANG_COOKIE, dict } from '@/lib/i18n';
 import type { Lang } from '@/lib/types';
@@ -46,6 +46,19 @@ export function Header({ lang }: { lang: Lang }) {
 
   useEffect(() => {
     document.body.style.overflow = open ? 'hidden' : '';
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    // Close the menu if the window grows past the mobile layout.
+    const mq = matchMedia('(min-width: 861px)');
+    const onWide = () => mq.matches && setOpen(false);
+    addEventListener('keydown', onKey);
+    mq.addEventListener('change', onWide);
+    return () => {
+      removeEventListener('keydown', onKey);
+      mq.removeEventListener('change', onWide);
+    };
   }, [open]);
 
   const switchLang = () => {
@@ -71,6 +84,10 @@ export function Header({ lang }: { lang: Lang }) {
             {d.nav[id]}
           </Link>
         ))}
+        <Link href="/#contact" className="nav-cta btn btn-primary" onClick={() => setOpen(false)}>
+          {d.start}
+          <ArrowUpRight />
+        </Link>
       </nav>
       <div className="header-actions">
         <button className="lang-btn" onClick={switchLang} disabled={pending} lang={lang === 'en' ? 'ar' : 'en'}>
